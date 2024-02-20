@@ -5,6 +5,7 @@ import (
 
 	"github.com/julienschmidt/httprouter"
 	"github.com/justinas/alice"
+	"github.com/m0hh/snippetboxx/ui"
 )
 
 // The routes() method returns a servemux containing our application routes.
@@ -16,8 +17,8 @@ func (app *application) routes() http.Handler {
 	})
 
 	dynamic := alice.New(app.sessionManager.LoadAndSave, noSurf, app.authenticate)
-	fileServer := http.FileServer(http.Dir("./ui/static/"))
-	router.Handler(http.MethodGet, "/static/*filepath", http.StripPrefix("/static", fileServer))
+	fileServer := http.FileServer(http.FS(ui.Files))
+	router.Handler(http.MethodGet, "/static/*filepath", fileServer)
 
 	router.Handler(http.MethodGet, "/", dynamic.ThenFunc(app.home))
 	router.Handler(http.MethodGet, "/snippet/view/:id", dynamic.ThenFunc(app.snippetView))
