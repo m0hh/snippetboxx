@@ -29,3 +29,11 @@ func (m *UserModel) Exists(id int) (bool, error) {
 		return false, nil
 	}
 }
+
+func (m *UserModel) Retrieve(id int) (*models.User, error) {
+	return nil, nil
+}
+
+func (m *UserModel) ChangePassword(id int, password string, newpassword string) error {
+	return nil
+}

@@ -61,3 +61,7 @@ func Matches(value string, rx *regexp.Regexp) bool {
 func (v *Validator) AddNonFIeldError(message string) {
 	v.NonFieldErrors = append(v.NonFieldErrors, message)
 }
+
+func StringMatches(value1, value2 string) bool {
+	return value1 == value2
+}

@@ -199,6 +199,12 @@ func (app *application) userLoginPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	app.sessionManager.Put(r.Context(), "authenticatedUserID", id)
+	path := app.sessionManager.PopString(r.Context(), "redirectPathAfterLogin")
+	if path != "" {
+		http.Redirect(w, r, path, http.StatusSeeOther)
+		return
+	}
+
 	http.Redirect(w, r, "/snippet/create", http.StatusSeeOther)
 }
 
@@ -217,4 +223,90 @@ func (app *application) userLogoutPost(w http.ResponseWriter, r *http.Request) {
 
 func ping(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
+}
+
+func (app *application) about(w http.ResponseWriter, r *http.Request) {
+	data := app.newTemplateData(r)
+
+	app.render(w, http.StatusOK, "about.html", data)
+}
+
+func (app *application) account(w http.ResponseWriter, r *http.Request) {
+
+	id := app.sessionManager.GetInt(r.Context(), "authenticatedUserID")
+
+	account, err := app.users.Retrieve(id)
+
+	if err != nil {
+		if errors.Is(err, models.ErrNoRecord) {
+			http.Redirect(w, r, "/user/login", http.StatusSeeOther)
+		} else {
+			app.serverError(w, err)
+		}
+		return
+	}
+	data := app.newTemplateData(r)
+	data.Account = account
+
+	app.render(w, http.StatusOK, "account.html", data)
+}
+
+type changePasswordForm struct {
+	Current string `form:"current"`
+	New     string `form:"new"`
+	Confirm string `form:"confirm"`
+
+	validator.Validator `form:"-"`
+}
+
+func (app *application) accountPasswordUpdate(w http.ResponseWriter, r *http.Request) {
+	data := app.newTemplateData(r)
+	data.Form = changePasswordForm{}
+	app.render(w, http.StatusOK, "password.html", data)
+}
+
+func (app *application) accountPasswordUpdatePost(w http.ResponseWriter, r *http.Request) {
+	var form changePasswordForm
+
+	id := app.sessionManager.GetInt(r.Context(), "authenticatedUserID")
+
+	err := app.decodePostForm(r, &form)
+
+	if err != nil {
+		app.clientError(w, http.StatusBadRequest)
+		return
+	}
+
+	form.CheckFIeld(validator.NotBlank(form.Current), "current", "This field cannot be blank")
+	form.CheckFIeld(validator.NotBlank(form.New), "new", "This field cannot be blank")
+	form.CheckFIeld(validator.NotBlank(form.Confirm), "confirm", "This field cannot be blank")
+	form.CheckFIeld(validator.MinChars(form.New, 8), "new", "This field must be at least 8 charachters long")
+	form.CheckFIeld(validator.StringMatches(form.New, form.Confirm), "confirm", "passwords don't match")
+
+	if !form.Valid() {
+		data := app.newTemplateData(r)
+		data.Form = form
+		app.render(w, http.StatusUnprocessableEntity, "password.html", data)
+		return
+	}
+
+	err = app.users.ChangePassword(id, form.Current, form.New)
+	if err != nil {
+		if errors.Is(err, models.ErrNoRecord) {
+			http.Redirect(w, r, "/user/login", http.StatusSeeOther)
+			return
+		} else if errors.Is(err, models.ErrInvvalidCredentials) {
+			form.AddFieldError("current", "Your Old Password is not correct")
+			data := app.newTemplateData(r)
+			data.Form = form
+			app.render(w, http.StatusUnprocessableEntity, "password.html", data)
+			return
+		} else {
+			app.serverError(w, err)
+			return
+		}
+	}
+	app.sessionManager.Put(r.Context(), "flash", "You're password has been changed successfuly")
+	http.Redirect(w, r, "/about", http.StatusSeeOther)
+
 }
